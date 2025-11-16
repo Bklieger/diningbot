@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bklieger/diningbot/cache"
 	"github.com/bklieger/diningbot/config"
 	"github.com/bklieger/diningbot/parser"
 	"golang.org/x/net/publicsuffix"
@@ -23,6 +24,7 @@ type DiningHallClient struct {
 	eventValidation    string
 	viewStateGenerator string
 	Debug              bool // Enable debug output
+	cache              *cache.MenuCache
 }
 
 func NewDiningHallClient() (*DiningHallClient, error) {
@@ -40,6 +42,7 @@ func NewDiningHallClient() (*DiningHallClient, error) {
 		client:  client,
 		jar:     jar,
 		baseURL: config.DefaultBaseURL,
+		cache:   cache.NewMenuCache(1 * time.Hour), // 1 hour cache TTL
 	}, nil
 }
 
@@ -144,6 +147,18 @@ func (d *DiningHallClient) GetMenu(location, date, mealType string) ([]string, e
 	}
 	if !config.IsValidMealType(mealType) {
 		return nil, fmt.Errorf("invalid meal type: %s", mealType)
+	}
+
+	// Check cache first
+	if cached, found := d.cache.Get(location, date, mealType); found {
+		if d.Debug {
+			fmt.Printf("DEBUG: Cache hit for %s %s %s\n", location, date, mealType)
+		}
+		return cached, nil
+	}
+
+	if d.Debug {
+		fmt.Printf("DEBUG: Cache miss for %s %s %s, fetching from server\n", location, date, mealType)
 	}
 
 	// Initialize session if not already done
@@ -280,6 +295,10 @@ func (d *DiningHallClient) GetMenu(location, date, mealType string) ([]string, e
 			}
 		}
 	}
+
+	// Store in cache (even if empty, to avoid repeated failed requests)
+	d.cache.Set(location, date, mealType, foods)
+
 	return foods, nil
 }
 
