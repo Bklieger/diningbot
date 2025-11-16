@@ -1,0 +1,44 @@
+# Binaries
+diningbot
+http_wrapper
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Debug files
+debug_*.html
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation (optional - remove if you want docs in image)
+*.md
+!README.md
+
+# Test files
+*_test.go
+
+# Temporary files
+tmp/
+temp/
+

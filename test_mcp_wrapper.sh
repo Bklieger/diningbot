@@ -12,49 +12,88 @@ echo -e "${BOLD}${BLUE}========================================${NC}"
 echo -e "${BOLD}${BLUE}  MCP Server CURL Commands${NC}"
 echo -e "${BOLD}${BLUE}========================================${NC}"
 echo ""
-echo -e "${YELLOW}Note:${NC} Start the HTTP wrapper first: ${CYAN}go run http_wrapper.go${NC}"
+echo -e "${YELLOW}Note:${NC} Start the MCP server first: ${CYAN}PORT=8080 go run main.go${NC}"
+echo -e "${YELLOW}      ${NC}Or use Docker: ${CYAN}docker run -p 8080:8080 diningbot-mcp${NC}"
 echo ""
 
-# 1. Initialize
+# Helper function to extract JSON from SSE response
+extract_json() {
+    grep "^data:" | sed 's/^data: //' | jq '.'
+}
+
+# Helper function to extract session ID from headers
+get_session_id() {
+    grep -i "mcp-session-id" | cut -d' ' -f2 | tr -d '\r'
+}
+
+# 1. Initialize and get session ID
 echo -e "${BOLD}${GREEN}1. Initialize${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-curl -s -X POST http://localhost:8080/mcp \
+INIT_RESPONSE=$(curl -s -i -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2025-06-18" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
     "method": "initialize",
     "params": {
-      "protocolVersion": "2024-11-05",
+      "protocolVersion": "2025-06-18",
       "capabilities": {},
       "clientInfo": {
         "name": "curl-client",
         "version": "1.0.0"
       }
     }
-  }' | jq '.'
+  }')
+
+SESSION_ID=$(echo "$INIT_RESPONSE" | get_session_id)
+echo "$INIT_RESPONSE" | extract_json
 echo ""
+echo "Session ID: $SESSION_ID"
 echo ""
 
-# 2. List Tools
-echo -e "${BOLD}${GREEN}2. List Tools${NC}"
+# 2. Send initialized notification
+echo -e "${BOLD}${GREEN}2. Send Initialized Notification${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2025-06-18" \
+  -H "Mcp-Session-Id: $SESSION_ID" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  }' > /dev/null
+echo "✓ Initialized"
+echo ""
+echo ""
+
+# 3. List Tools
+echo -e "${BOLD}${GREEN}3. List Tools${NC}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+curl -s -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2025-06-18" \
+  -H "Mcp-Session-Id: $SESSION_ID" \
   -d '{
     "jsonrpc": "2.0",
     "id": 2,
     "method": "tools/list"
-  }' | jq '.'
+  }' | extract_json
 echo ""
 echo ""
 
-# 3. Get Menu
-echo -e "${BOLD}${GREEN}3. Get Menu${NC}"
+# 4. Get Menu
+echo -e "${BOLD}${GREEN}4. Get Menu${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 TODAY=$(date +%-m/%-d/%Y)
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2025-06-18" \
+  -H "Mcp-Session-Id: $SESSION_ID" \
   -d "{
     \"jsonrpc\": \"2.0\",
     \"id\": 3,
@@ -67,15 +106,18 @@ curl -s -X POST http://localhost:8080/mcp \
         \"mealType\": \"Lunch\"
       }
     }
-  }" | jq '.'
+  }" | extract_json
 echo ""
 echo ""
 
-# 4. Get Menus Range
-echo -e "${BOLD}${GREEN}4. Get Menus Range${NC}"
+# 5. Get Menus Range
+echo -e "${BOLD}${GREEN}5. Get Menus Range${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2025-06-18" \
+  -H "Mcp-Session-Id: $SESSION_ID" \
   -d '{
     "jsonrpc": "2.0",
     "id": 4,
@@ -88,10 +130,9 @@ curl -s -X POST http://localhost:8080/mcp \
         "days": 3
       }
     }
-  }' | jq '.'
+  }' | extract_json
 echo ""
 echo ""
 echo -e "${BOLD}${GREEN}========================================${NC}"
 echo -e "${BOLD}${GREEN}  Complete!${NC}"
 echo -e "${BOLD}${GREEN}========================================${NC}"
-

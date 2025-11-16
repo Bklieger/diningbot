@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
+	"os"
 	"time"
 
 	"github.com/bklieger/diningbot/client"
@@ -210,8 +212,8 @@ func GetMenusRange(ctx context.Context, req *mcp.CallToolRequest, input GetMenus
 	}, nil
 }
 
-func main() {
-	// Create MCP server
+// setupServer creates and configures the MCP server with all tools
+func setupServer() *mcp.Server {
 	server := mcp.NewServer(
 		&mcp.Implementation{
 			Name:    "diningbot",
@@ -300,8 +302,48 @@ func main() {
 		OutputSchema: getMenusRangeOutputSchema,
 	}, GetMenusRange)
 
-	// Run the server over stdin/stdout
-	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-		log.Fatal(err)
+	return server
+}
+
+func main() {
+	server := setupServer()
+
+	// Check if PORT is set - if so, run as remote Streamable HTTP server, otherwise use stdio
+	port := os.Getenv("PORT")
+	if port != "" {
+		// Remote mode: Run Streamable HTTP server (MCP 2025-06-18)
+		// Per spec: bind to localhost by default for security, but allow override for Docker
+		bindAddr := os.Getenv("BIND_ADDR")
+		if bindAddr == "" {
+			bindAddr = "127.0.0.1" // Default to localhost per security recommendations
+		}
+
+		handler := mcp.NewStreamableHTTPHandler(
+			func(request *http.Request) *mcp.Server {
+				return server
+			},
+			nil,
+		)
+
+		addr := bindAddr + ":" + port
+
+		// Set up HTTP routes - single MCP endpoint per spec
+		// The handler supports both POST (client requests) and GET (server-initiated streams)
+		http.Handle("/mcp", handler)
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("DiningBot MCP Server\n\nConnect to /mcp for Streamable HTTP transport (MCP 2025-06-18)\n"))
+		})
+
+		log.Printf("MCP server listening on %s", addr)
+		log.Printf("Streamable HTTP endpoint: http://%s/mcp", addr)
+		log.Printf("Protocol: MCP 2025-06-18 (Streamable HTTP)")
+		log.Fatal(http.ListenAndServe(addr, nil))
+	} else {
+		// Local mode: Run over stdin/stdout
+		if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
