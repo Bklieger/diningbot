@@ -26,3 +26,4 @@ debug_*.html
 .DS_Store
 Thumbs.db
 
+http_wrapper
